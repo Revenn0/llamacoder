@@ -8,8 +8,8 @@ export const MODELS = [
     value: "anthropic/claude-sonnet-4.5",
   },
   {
-    label: "Gemini 3 Flash",
-    value: "google/gemini-3-flash",
+    label: "Gemini 3 Pro",
+    value: "google/gemini-3-pro-preview",
   },
 ];
 
