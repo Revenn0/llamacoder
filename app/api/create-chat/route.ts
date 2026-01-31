@@ -5,7 +5,7 @@ import {
   screenshotToCodePrompt,
   softwareArchitectPrompt,
 } from "@/lib/prompts";
-import Together from "together-ai";
+import { generateText } from "ai";
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,61 +22,31 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    let options: ConstructorParameters<typeof Together>[0] = {};
-    if (process.env.HELICONE_API_KEY) {
-      options.baseURL = "https://together.helicone.ai/v1";
-      options.defaultHeaders = {
-        "Helicone-Auth": `Bearer ${process.env.HELICONE_API_KEY}`,
-        "Helicone-Property-appname": "LlamaCoder",
-        "Helicone-Session-Id": chat.id,
-        "Helicone-Session-Name": "LlamaCoder Chat",
-      };
-    }
-
-    const together = new Together(options);
-
     async function fetchTitle() {
-      const responseForChatTitle = await together.chat.completions.create({
-        model: "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a chatbot helping the user create a simple app or script, and your current job is to create a succinct title, maximum 3-5 words, for the chat given their initial prompt. Please return only the title.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
+      const responseForChatTitle = await generateText({
+        model: "meta/llama-3.3-70b",
+        system:
+          "You are a chatbot helping the user create a simple app or script, and your current job is to create a succinct title, maximum 3-5 words, for the chat given their initial prompt. Please return only the title.",
+        prompt,
       });
-      const title = responseForChatTitle.choices[0].message?.content || prompt;
+      const title = responseForChatTitle.text || prompt;
       return title;
     }
 
     async function fetchTopExample() {
-      const findSimilarExamples = await together.chat.completions.create({
-        model: "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
-        messages: [
-          {
-            role: "system",
-            content: `You are a helpful bot. Given a request for building an app, you match it to the most similar example provided. If the request is NOT similar to any of the provided examples, return "none". Here is the list of examples, ONLY reply with one of them OR "none":
+      const findSimilarExamples = await generateText({
+        model: "meta/llama-3.3-70b",
+        system: `You are a helpful bot. Given a request for building an app, you match it to the most similar example provided. If the request is NOT similar to any of the provided examples, return "none". Here is the list of examples, ONLY reply with one of them OR "none":
 
             - landing page
             - blog app
             - quiz app
             - pomodoro timer
             `,
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
+        prompt,
       });
 
-      const mostSimilarExample =
-        findSimilarExamples.choices[0].message?.content || "none";
+      const mostSimilarExample = findSimilarExamples.text || "none";
       return mostSimilarExample;
     }
 
@@ -87,54 +57,42 @@ export async function POST(request: NextRequest) {
 
     let fullScreenshotDescription;
     if (screenshotUrl) {
-      const screenshotResponse = await together.chat.completions.create({
-        model: "Qwen/Qwen3-VL-32B-Instruct",
+      const screenshotResponse = await generateText({
+        model: "google/gemini-3-flash",
         temperature: 0.4,
-        max_tokens: 1000,
+        maxOutputTokens: 1000,
         messages: [
           {
             role: "user",
             content: [
               { type: "text", text: screenshotToCodePrompt },
               {
-                type: "image_url",
-                image_url: {
-                  url: screenshotUrl,
-                },
+                type: "image",
+                image: screenshotUrl,
               },
             ],
           },
         ],
       });
 
-      fullScreenshotDescription =
-        screenshotResponse.choices[0].message?.content;
+      fullScreenshotDescription = screenshotResponse.text;
     }
 
     let userMessage: string;
     if (quality === "high") {
-      let initialRes = await together.chat.completions.create({
-        model: "Qwen/Qwen3-Next-80B-A3B-Instruct",
-        // model: "moonshotai/Kimi-K2-Thinking",
-        messages: [
-          {
-            role: "system",
-            content: softwareArchitectPrompt,
-          },
-          {
-            role: "user",
-            content: fullScreenshotDescription
-              ? fullScreenshotDescription + prompt
-              : prompt,
-          },
-        ],
+      let initialRes = await generateText({
+        model: "moonshotai/kimi-k2.5",
+        system: softwareArchitectPrompt,
+        prompt: fullScreenshotDescription
+          ? fullScreenshotDescription + prompt
+          : prompt,
         temperature: 0.4,
-        max_tokens: 3000,
+        maxOutputTokens: 3000,
       });
 
-      console.log("PLAN:", initialRes.choices[0].message?.content);
+      console.log("PLAN:", initialRes.text);
 
-      userMessage = initialRes.choices[0].message?.content ?? prompt;
+      userMessage = initialRes.text ?? prompt;
     } else if (fullScreenshotDescription) {
       userMessage =
         prompt +
