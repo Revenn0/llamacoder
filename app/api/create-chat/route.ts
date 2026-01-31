@@ -11,6 +11,9 @@ export async function POST(request: NextRequest) {
   try {
     const { prompt, model, quality, screenshotUrl } = await request.json();
 
+    console.log("[v0] DATABASE_URL exists:", !!process.env.DATABASE_URL);
+    console.log("[v0] Creating chat with model:", model);
+
     const prisma = getPrisma();
     const chat = await prisma.chat.create({
       data: {
@@ -57,8 +60,9 @@ export async function POST(request: NextRequest) {
 
     let fullScreenshotDescription;
     if (screenshotUrl) {
+      console.log("[v0] Processing screenshot with Gemini");
       const screenshotResponse = await generateText({
-        model: "google/gemini-3-flash",
+        model: "google/gemini-2.0-flash-exp",
         temperature: 0.4,
         maxOutputTokens: 1000,
         messages: [
@@ -76,6 +80,7 @@ export async function POST(request: NextRequest) {
       });
 
       fullScreenshotDescription = screenshotResponse.text;
+      console.log("[v0] Screenshot processed successfully");
     }
 
     let userMessage: string;
